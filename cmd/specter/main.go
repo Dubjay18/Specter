@@ -1,8 +1,12 @@
 package main
 
-import "fmt"
+import (
+	"net/http"
+	"github.com/Dubjay/specter/internal/proxy"
+)
 
 
 func main() {
-	fmt.Println("specter starting...")
+	proxy := proxy.New("http://localhost:5173")
+	http.ListenAndServe(":8000", proxy)
 }
