@@ -1,0 +1,14 @@
+specter:
+  listen: ":8080"
+  live_target: "http://localhost:3000"
+  shadow_target: "http://localhost:3001"
+  routing_key: "X-User-ID"
+
+store:
+  backend: "badger"         # or "postgres"
+  badger_path: "./data/specter"
+  postgres_dsn: ""          # only needed if backend is postgres
+
+sampling:
+  rate: 1.0                 # 1.0 = mirror all traffic, 0.1 = 10%, etc.
+  divergence_only: false    # true = only store events where responses diverged
