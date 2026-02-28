@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -8,7 +10,8 @@ import (
 )
 
 type Proxy struct {
-	liveURL string
+	liveURL      string
+	shadowURL    string
 	ReverseProxy *httputil.ReverseProxy
 }
 
@@ -31,6 +34,19 @@ func New(liveURL string) *Proxy {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Buffer the body ONCE so both live and shadow can read it.
+	// HTTP bodies are streams — once read they're gone.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "error reading request body", http.StatusInternalServerError)
+		return
+	}
+	r.Body.Close()
+	// Restore the body for the reverse proxy (live).
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	if p.shadowURL != "" {
+		go p.forkToShadow(r, body)
+	}
 	log.Printf("specter: %s %s → live", r.Method, r.URL.Path)
 	p.ReverseProxy.ServeHTTP(w, r)
 }
