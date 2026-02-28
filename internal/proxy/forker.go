@@ -32,16 +32,23 @@ func (p *Proxy) forkToShadow(r *http.Request, body []byte) {
 	// Without this, the shadow request body would be empty.
 	cloned.Body = io.NopCloser(bytes.NewReader(body))
 	cloned.ContentLength = int64(len(body))
+	start := time.Now()
 	resp, err := shadowClient.Do(cloned)
+	latency := time.Since(start)
 	if err != nil {
 		log.Printf("specter: shadow error (%s %s): %v", r.Method, r.URL.Path, err)
 		return
 	}
 
+	captured, err := captureResponse(resp, latency)
+	if err != nil {
+		log.Printf("specter: failed to capture shadow response: %v", err)
+		return
+	}
 
-	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
 
-	log.Printf("specter: shadow responded %d (%s %s)", resp.StatusCode, r.Method, r.URL.Path)
+
+log.Printf("specter: shadow → status=%d latency=%v body=%s",
+		captured.StatusCode, captured.Latency, captured.Body)
 
 }
