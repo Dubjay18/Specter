@@ -15,7 +15,7 @@ type Proxy struct {
 	ReverseProxy *httputil.ReverseProxy
 }
 
-func New(liveURL string) *Proxy {
+func New(liveURL string, shadowURL string) *Proxy {
 	u, err := url.Parse(liveURL)
 	if err != nil {
 		log.Fatalf("specter: invalid live URL %q: %v", liveURL, err)
@@ -29,6 +29,7 @@ func New(liveURL string) *Proxy {
 	}
 	return &Proxy{
 		liveURL:      liveURL,
+		shadowURL: shadowURL,
 		ReverseProxy: ph,
 	}
 }
