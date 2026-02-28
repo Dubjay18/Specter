@@ -23,8 +23,38 @@
 
 ---
 
-> Specter mirrors your production traffic silently to a shadow service,
-> compares the responses, and tells you exactly where your rewrite is lying to you.
-> No fake load tests. No synthetic data. The real thing — zero risk.
+## What is Specter?
 
-**Coming soon.** Watch this space. ⚡
+Specter sits in front of your services and plays the long game.
+
+Every request that comes in gets forwarded to your **live** service as normal.
+Simultaneously, a silent copy gets fired at your **shadow** service — a canary,
+a rewrite, a new version, whatever you're testing. The shadow response never
+reaches the client. Instead, Specter compares the two, logs every divergence,
+and builds a statistical profile of how your new service behaves under *real*
+production traffic.
+
+No fake load tests. No synthetic data. The real thing — with zero risk.
+
+> **"Anyone can do it with perfect data. You want to be great?**
+> **Test against the messy stuff."**
+> — Harvey Specter (we're paraphrasing)
+
+---
+
+## Why Specter?
+
+Every team doing a service rewrite, database migration, or language port faces
+the same problem: *you can't know if the new thing is correct until real traffic
+hits it — but you can't risk real traffic hitting it until you know it's correct.*
+
+That's the catch-22. Specter breaks it.
+
+| Without Specter | With Specter |
+|---|---|
+| "It passed staging" 🤞 | "It matched 99.97% of production traffic" ✅ |
+| Find bugs after cutover | Find bugs before cutover |
+| Blind confidence | Evidence-based confidence |
+| Sleepless deploy nights | Boring deploy afternoons |
+
+---
