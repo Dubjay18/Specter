@@ -6,12 +6,12 @@ import (
 
 // Config is the top-level config structure that mirrors specter.yaml.
 type Config struct {
-	Specter  SpectreConfig  `mapstructure:"specter"`
+	Specter  SpecterConfig  `mapstructure:"specter"`
 	Store    StoreConfig    `mapstructure:"store"`
 	Sampling SamplingConfig `mapstructure:"sampling"`
 }
 
-type SpectreConfig struct {
+type SpecterConfig struct {
 	Listen       string `mapstructure:"listen"`
 	LiveTarget   string `mapstructure:"live_target"`
 	ShadowTarget string `mapstructure:"shadow_target"`
