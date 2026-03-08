@@ -18,6 +18,19 @@ func Analyze(req *http.Request, live, shadow *types.CapturedResponse) Divergence
 	
 	dl:= DiffLatency(live.Latency.Milliseconds(),shadow.Latency.Milliseconds())
 
+	// check if they are identical
+	if len(db) == 0 && ds == nil {
+		return DivergenceEvent{
+			ID: uuid.New().String(),
+			Timestamp: time.Now(),
+			RequestPath: req.URL.Path,
+			Method: req.Method,
+			BodyDiff: nil,
+			StatusDiff: nil,
+			LatencyDiff: dl,
+			Diverged: false,
+		}
+	}
 	return  DivergenceEvent{
 		ID: uuid.New().String(),
 		Timestamp: time.Now(),
