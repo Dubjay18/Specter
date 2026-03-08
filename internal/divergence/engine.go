@@ -1,44 +1,66 @@
 package divergence
 
 import (
-	"fmt"
+	"log"
 	"net/http"
 	"time"
 
+	"github.com/Dubjay/specter/internal/store"
 	"github.com/Dubjay/specter/internal/types"
 	"github.com/google/uuid"
 )
 
-func Analyze(req *http.Request, live, shadow *types.CapturedResponse) DivergenceEvent {
-	db, err := DiffBodies(live.Body,shadow.Body)
+type DivergenceEngine struct {
+	store store.Store
+}
+
+func NewEngine(s store.Store) *DivergenceEngine {
+	return &DivergenceEngine{store: s}
+}
+
+func (de *DivergenceEngine) Analyze(req *http.Request, live, shadow *types.CapturedResponse) types.DivergenceEvent {
+	db, err := DiffBodies(live.Body, shadow.Body)
 	if err != nil {
-		fmt.Printf("%v",err)
+		log.Printf("specter: failed to diff bodies: %v", err)
 	}
-	ds := DiffStatus(live.StatusCode,shadow.StatusCode)
-	
-	dl:= DiffLatency(live.Latency.Milliseconds(),shadow.Latency.Milliseconds())
+	ds := DiffStatus(live.StatusCode, shadow.StatusCode)
+
+	dl := DiffLatency(live.Latency.Milliseconds(), shadow.Latency.Milliseconds())
 
 	// check if they are identical
 	if len(db) == 0 && ds == nil {
-		return DivergenceEvent{
-			ID: uuid.New().String(),
-			Timestamp: time.Now(),
+		result := types.DivergenceEvent{
+			ID:          uuid.New().String(),
+			Timestamp:   time.Now(),
 			RequestPath: req.URL.Path,
-			Method: req.Method,
-			BodyDiff: nil,
-			StatusDiff: nil,
+			Method:      req.Method,
+			BodyDiff:    nil,
+			StatusDiff:  nil,
 			LatencyDiff: dl,
-			Diverged: false,
+			Diverged:    false,
 		}
+		de.save(result)
+		return result
 	}
-	return  DivergenceEvent{
-		ID: uuid.New().String(),
-		Timestamp: time.Now(),
+	result := types.DivergenceEvent{
+		ID:          uuid.New().String(),
+		Timestamp:   time.Now(),
 		RequestPath: req.URL.Path,
-		Method: req.Method,
-		BodyDiff: db,
-		StatusDiff: ds,
+		Method:      req.Method,
+		BodyDiff:    db,
+		StatusDiff:  ds,
 		LatencyDiff: dl,
-		Diverged: true,
+		Diverged:    true,
+	}
+	de.save(result)
+	return result
+}
+
+func (de *DivergenceEngine) save(event types.DivergenceEvent) {
+	if de.store == nil {
+		return
+	}
+	if err := de.store.Save(event); err != nil {
+		log.Printf("specter: failed to persist divergence event %s: %v", event.ID, err)
 	}
 }

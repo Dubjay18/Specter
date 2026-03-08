@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 
+	"github.com/Dubjay/specter/internal/types"
 	"github.com/wI2L/jsondiff"
 )
 
-func DiffBodies(live, shadow []byte) ([]BodyDiffEntry, error) {
+func DiffBodies(live, shadow []byte) ([]types.BodyDiffEntry, error) {
 	patch, err := jsondiff.CompareJSON(
     shadow,
     live,
@@ -18,11 +19,11 @@ func DiffBodies(live, shadow []byte) ([]BodyDiffEntry, error) {
     }),
 )
 if err != nil {
-	return []BodyDiffEntry{}, err
+	return []types.BodyDiffEntry{}, err
 }
-response := []BodyDiffEntry{}
+response := []types.BodyDiffEntry{}
 for _,v := range patch {
-	response = append(response, BodyDiffEntry{
+	response = append(response, types.BodyDiffEntry{
 		Op: v.Type,
 		Path: v.Path,
 		LiveValue: v.Value,

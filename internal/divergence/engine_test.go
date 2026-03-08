@@ -8,6 +8,30 @@ import (
 	"github.com/Dubjay/specter/internal/types"
 )
 
+type mockStore struct {
+	saved []types.DivergenceEvent
+}
+
+func (m *mockStore) Save(event types.DivergenceEvent) error {
+	m.saved = append(m.saved, event)
+	return nil
+}
+
+func (m *mockStore) List(limit int) ([]types.DivergenceEvent, error) {
+	if limit <= 0 || limit >= len(m.saved) {
+		return m.saved, nil
+	}
+	return m.saved[:limit], nil
+}
+
+func (m *mockStore) Close() error {
+	return nil
+}
+
+func newEngineForTest() *DivergenceEngine {
+	return NewEngine(&mockStore{})
+}
+
 // makeCapture is a test helper to build a CapturedResponse quickly.
 // Import your actual CapturedResponse type from the proxy package.
 // If it lives in the same package, just use it directly.
@@ -24,8 +48,9 @@ func TestAnalyzePopulatesEvent(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/users/42", nil)
 	live := makeCapture(200, `{"id":42}`, 80)
 	shadow := makeCapture(200, `{"id":42}`, 90)
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if event.ID == "" {
 		t.Error("expected non-empty event ID")
@@ -46,8 +71,9 @@ func TestAnalyzeNoDivergence(t *testing.T) {
 	req := httptest.NewRequest("GET", "/health", nil)
 	live := makeCapture(200, `{"status":"ok"}`, 50)
 	shadow := makeCapture(200, `{"status":"ok"}`, 55)
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if event.Diverged {
 		t.Errorf("expected Diverged=false for identical responses, got true. Diffs: %+v", event.BodyDiff)
@@ -62,8 +88,9 @@ func TestAnalyzeBodyDivergence(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/cart", nil)
 	live := makeCapture(200, `{"total": 99.99}`, 60)
 	shadow := makeCapture(200, `{"total": 0.00}`, 65) // total is wrong in shadow
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if !event.Diverged {
 		t.Error("expected Diverged=true when body totals differ, got false")
@@ -76,10 +103,11 @@ func TestAnalyzeBodyDivergence(t *testing.T) {
 // TestAnalyzeStatusDivergence checks Diverged=true when status codes differ.
 func TestAnalyzeStatusDivergence(t *testing.T) {
 	req := httptest.NewRequest("DELETE", "/api/items/1", nil)
-	live := makeCapture(204, ``, 40)   // 204 No Content
+	live := makeCapture(204, ``, 40)                   // 204 No Content
 	shadow := makeCapture(500, `{"error":"oops"}`, 45) // 500 Internal Error
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if !event.Diverged {
 		t.Error("expected Diverged=true when status codes differ, got false")
@@ -101,8 +129,9 @@ func TestAnalyzeLatencyAlwaysRecorded(t *testing.T) {
 	req := httptest.NewRequest("GET", "/", nil)
 	live := makeCapture(200, `{}`, 100)
 	shadow := makeCapture(200, `{}`, 300)
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if event.LatencyDiff.LiveMs == 0 {
 		t.Error("expected LiveMs to be populated, got 0")
@@ -120,8 +149,9 @@ func TestAnalyzePOSTRequest(t *testing.T) {
 	req := httptest.NewRequest("POST", "/api/orders", nil)
 	live := makeCapture(201, `{"order_id":"xyz"}`, 120)
 	shadow := makeCapture(201, `{"order_id":"xyz"}`, 130)
+	engine := newEngineForTest()
 
-	event := Analyze(req, live, shadow)
+	event := engine.Analyze(req, live, shadow)
 
 	if event.Method != "POST" {
 		t.Errorf("expected Method 'POST', got %q", event.Method)

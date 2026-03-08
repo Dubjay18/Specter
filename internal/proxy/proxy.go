@@ -7,15 +7,18 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+
+	"github.com/Dubjay/specter/internal/divergence"
 )
 
 type Proxy struct {
 	liveURL      string
 	shadowURL    string
 	ReverseProxy *httputil.ReverseProxy
+	divergence   *divergence.DivergenceEngine
 }
 
-func New(liveURL string, shadowURL string) *Proxy {
+func New(liveURL string, shadowURL string, engine *divergence.DivergenceEngine) *Proxy {
 	u, err := url.Parse(liveURL)
 	if err != nil {
 		log.Fatalf("specter: invalid live URL %q: %v", liveURL, err)
@@ -29,8 +32,9 @@ func New(liveURL string, shadowURL string) *Proxy {
 	}
 	return &Proxy{
 		liveURL:      liveURL,
-		shadowURL: shadowURL,
+		shadowURL:    shadowURL,
 		ReverseProxy: ph,
+		divergence:   engine,
 	}
 }
 

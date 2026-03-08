@@ -1,10 +1,12 @@
 package divergence
 
-func DiffStatus(live, shadow int) *StatusDiff {
+import "github.com/Dubjay/specter/internal/types"
+
+func DiffStatus(live, shadow int) *types.StatusDiff {
 	if live == shadow {
 		return nil
 	}
-	return &StatusDiff{
+	return &types.StatusDiff{
 		Live: live,
 		Shadow: shadow,
 	}
