@@ -2,6 +2,7 @@ package divergence
 
 import (
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 
 type DivergenceEngine struct {
 	store store.Store
+	samplingRate float64
+	divergenceOnly bool
 }
 
 func NewEngine(s store.Store) *DivergenceEngine {
@@ -39,7 +42,9 @@ func (de *DivergenceEngine) Analyze(req *http.Request, live, shadow *types.Captu
 			LatencyDiff: dl,
 			Diverged:    false,
 		}
+	if !de.divergenceOnly {
 		de.save(result)
+	}
 		return result
 	}
 	result := types.DivergenceEvent{
@@ -52,6 +57,9 @@ func (de *DivergenceEngine) Analyze(req *http.Request, live, shadow *types.Captu
 		LatencyDiff: dl,
 		Diverged:    true,
 	}
+		if rand.Float64() >  de.samplingRate  {
+			return result
+		}
 	de.save(result)
 	return result
 }
