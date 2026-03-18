@@ -5,13 +5,13 @@ specter:
   routing_key: "X-User-ID"
 
 cluster:
-  node_name: "node1"
+  node_name: "specter-1"
   bind_addr: "0.0.0.0:7946"
   peers: []
 
 store:
   backend: "badger"         # or "postgres"
-  badger_path: "./data/specter"
+  badger_path: "./data/specter-1"
   postgres_dsn: ""          # only needed if backend is postgres
 
 sampling:

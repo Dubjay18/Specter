@@ -3,15 +3,31 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"time"
 
 	"github.com/Dubjay/specter/internal/config"
 	"github.com/Dubjay/specter/internal/divergence"
 	"github.com/Dubjay/specter/internal/proxy"
+	"github.com/Dubjay/specter/internal/ring"
 	"github.com/Dubjay/specter/internal/store"
 )
 
 func main() {
-	cfg, err := config.Load("config/specter.yaml")
+	configPath := "internal/config/specter.yaml"
+	if len(os.Args) > 1 {
+		configPath = os.Args[1]
+	}
+
+	if _, err := os.Stat(configPath); err != nil {
+		legacyCandidate := filepath.Join("internal", "config", filepath.Base(configPath))
+		if _, legacyErr := os.Stat(legacyCandidate); legacyErr == nil {
+			configPath = legacyCandidate
+		}
+	}
+
+	cfg, err := config.Load(configPath)
 	if err != nil {
 		log.Fatalf("specter: failed to load config: %v", err)
 	}
@@ -23,7 +39,14 @@ func main() {
 	defer eventStore.Close()
 
 	engine := divergence.NewEngine(eventStore)
-
+	r := ring.NewRing(150)
+	// eventDelegate := ring.NewEventDelegate(r)
+	ml, err := ring.StartMembership(cfg.Cluster.NodeName, cfg.Cluster.BindAddr, cfg.Cluster.Peers, r)
+	if err != nil {
+		log.Fatalf("specter: failed to start membership: %v", err)
+	}
+	r.AddNode(cfg.Cluster.NodeName)
+	defer ml.Leave(5 * time.Second)
 	p := proxy.New(cfg.Specter.LiveTarget, cfg.Specter.ShadowTarget, engine)
 
 	log.Printf("specter: listening on %s", cfg.Specter.Listen)

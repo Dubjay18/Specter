@@ -1,6 +1,7 @@
 package ring
 
 import (
+	"log"
 	"net"
 	"strconv"
 
@@ -11,11 +12,18 @@ type EventDelegate struct {
 	ring *Ring
 }
 
+
+func NewEventDelegate(ring *Ring) *EventDelegate {
+	return &EventDelegate{ring: ring}
+}
+
 func (d *EventDelegate) NotifyJoin(node *memberlist.Node) {
+	 log.Printf("ring: node joined → %s", node.Name)
 	d.ring.AddNode(node.Name)
 }
 
 func (d *EventDelegate) NotifyLeave(node *memberlist.Node) {
+	 log.Printf("ring: node left → %s", node.Name)
 	d.ring.RemoveNode(node.Name)
 }
 
