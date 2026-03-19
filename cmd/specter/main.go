@@ -12,6 +12,7 @@ import (
 	"github.com/Dubjay/specter/internal/proxy"
 	"github.com/Dubjay/specter/internal/ring"
 	"github.com/Dubjay/specter/internal/store"
+	"github.com/Dubjay/specter/internal/ui/web"
 )
 
 func main() {
@@ -60,7 +61,12 @@ func main() {
 	log.Printf("specter: live    → %s", cfg.Specter.LiveTarget)
 	log.Printf("specter: shadow  → %s", cfg.Specter.ShadowTarget)
 
-	if err := http.ListenAndServe(cfg.Specter.Listen, p); err != nil {
+	mux := http.NewServeMux()
+	webServer := web.NewServer(engine)
+	webServer.RegisterRoutes(mux)
+	mux.Handle("/", p)
+
+	if err := http.ListenAndServe(cfg.Specter.Listen, mux); err != nil {
 		log.Fatalf("specter: server error: %v", err)
 	}
 }
