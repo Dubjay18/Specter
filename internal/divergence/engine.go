@@ -17,6 +17,7 @@ type DivergenceEngine struct {
 	samplingRate         float64
 	divergenceOnly       bool
 	startedAt            time.Time
+	latencyDeltaSumMs    atomic.Int64
 	totalRequests        atomic.Uint64
 	divergences          atomic.Uint64
 	matches              atomic.Uint64
@@ -32,15 +33,17 @@ type DivergenceEngine struct {
 }
 
 type StatsSnapshot struct {
-	StartedAt        time.Time         `json:"started_at"`
-	LastEventAt      *time.Time        `json:"last_event_at,omitempty"`
-	TotalRequests    uint64            `json:"total_requests"`
-	Divergences      uint64            `json:"divergences"`
-	Matches          uint64            `json:"matches"`
-	StatusMismatches uint64            `json:"status_mismatches"`
-	BodyMismatches   uint64            `json:"body_mismatches"`
-	LatencyBuckets   map[string]uint64 `json:"latency_buckets"`
-	DivergenceRate   float64           `json:"divergence_rate"`
+	StartedAt         time.Time               `json:"started_at"`
+	LastEventAt       *time.Time              `json:"last_event_at,omitempty"`
+	TotalRequests     uint64                  `json:"total_requests"`
+	Divergences       uint64                  `json:"divergences"`
+	Matches           uint64                  `json:"matches"`
+	StatusMismatches  uint64                  `json:"status_mismatches"`
+	BodyMismatches    uint64                  `json:"body_mismatches"`
+	LatencyBuckets    map[string]uint64       `json:"latency_buckets"`
+	DivergenceRate    float64                 `json:"divergence_rate"`
+	AvgLatencyDeltaMs float64                 `json:"avg_latency_delta_ms"`
+	RecentDivergences []types.DivergenceEvent `json:"recent_divergences,omitempty"`
 }
 
 func NewEngine(s store.Store) *DivergenceEngine {
@@ -58,6 +61,7 @@ func (de *DivergenceEngine) Analyze(req *http.Request, live, shadow *types.Captu
 	ds := DiffStatus(live.StatusCode, shadow.StatusCode)
 
 	dl := DiffLatency(live.Latency.Milliseconds(), shadow.Latency.Milliseconds())
+	de.latencyDeltaSumMs.Add(dl.DeltaMs)
 	de.recordLatencyBucket(dl.BucketLabel())
 
 	if ds != nil {
@@ -107,8 +111,10 @@ func (de *DivergenceEngine) StatsSnapshot() StatsSnapshot {
 	total := de.totalRequests.Load()
 	divergences := de.divergences.Load()
 	rate := 0.0
+	avgLatencyDeltaMs := 0.0
 	if total > 0 {
 		rate = float64(divergences) / float64(total)
+		avgLatencyDeltaMs = float64(de.latencyDeltaSumMs.Load()) / float64(total)
 	}
 
 	lastEventUnixNano := de.lastEventAtUnixNano.Load()
@@ -117,6 +123,8 @@ func (de *DivergenceEngine) StatsSnapshot() StatsSnapshot {
 		t := time.Unix(0, lastEventUnixNano)
 		lastEventAt = &t
 	}
+
+	recentDivergences := de.recentDivergences(10)
 
 	return StatsSnapshot{
 		StartedAt:        de.startedAt,
@@ -134,8 +142,35 @@ func (de *DivergenceEngine) StatsSnapshot() StatsSnapshot {
 			"10x slower":  de.latency10xSlower.Load(),
 			"10x+ slower": de.latency10xPlusSlower.Load(),
 		},
-		DivergenceRate: rate,
+		DivergenceRate:    rate,
+		AvgLatencyDeltaMs: avgLatencyDeltaMs,
+		RecentDivergences: recentDivergences,
 	}
+}
+
+func (de *DivergenceEngine) recentDivergences(limit int) []types.DivergenceEvent {
+	if de.store == nil || limit <= 0 {
+		return nil
+	}
+
+	events, err := de.store.List(limit * 5)
+	if err != nil {
+		log.Printf("specter: failed to list divergence events: %v", err)
+		return nil
+	}
+
+	recent := make([]types.DivergenceEvent, 0, limit)
+	for _, event := range events {
+		if !event.Diverged {
+			continue
+		}
+		recent = append(recent, event)
+		if len(recent) == limit {
+			break
+		}
+	}
+
+	return recent
 }
 
 func (de *DivergenceEngine) recordLatencyBucket(bucket string) {

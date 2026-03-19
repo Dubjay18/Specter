@@ -1,15 +1,15 @@
 package store
 
 import (
+	"sort"
+
 	"github.com/Dubjay/specter/internal/types"
 	"github.com/dgraph-io/badger/v4"
 )
 
-
 type store struct {
 	db *badger.DB
 }
-
 
 func NewStore(path string) (Store, error) {
 	opts := badger.DefaultOptions(path)
@@ -39,8 +39,7 @@ func (s *store) List(limit int) ([]types.DivergenceEvent, error) {
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
-		count := 0
-		for it.Rewind(); it.Valid() && count < limit; it.Next() {
+		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			err := item.Value(func(val []byte) error {
 				var event types.DivergenceEvent
@@ -53,10 +52,21 @@ func (s *store) List(limit int) ([]types.DivergenceEvent, error) {
 			if err != nil {
 				return err
 			}
-			count++
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(events, func(i, j int) bool {
+		return events[i].Timestamp.After(events[j].Timestamp)
+	})
+
+	if limit > 0 && len(events) > limit {
+		events = events[:limit]
+	}
+
 	return events, err
 }
 
