@@ -47,7 +47,14 @@ func main() {
 	}
 	r.AddNode(cfg.Cluster.NodeName)
 	defer ml.Leave(5 * time.Second)
-	p := proxy.New(cfg.Specter.LiveTarget, cfg.Specter.ShadowTarget, engine)
+	p := proxy.New(
+		cfg.Specter.LiveTarget,
+		cfg.Specter.ShadowTarget,
+		cfg.Cluster.NodeName,
+		cfg.Specter.RoutingKey,
+		r,
+		engine,
+	)
 
 	log.Printf("specter: listening on %s", cfg.Specter.Listen)
 	log.Printf("specter: live    → %s", cfg.Specter.LiveTarget)

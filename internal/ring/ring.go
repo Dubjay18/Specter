@@ -4,13 +4,15 @@ import (
 	"hash/crc32"
 	"slices"
 	"strconv"
+	"sync"
 )
 
-
 type Ring struct {
-    virtualNodes int
-    positions    []uint32
-    nodeMap      map[uint32]string
+	virtualNodes int
+	positions    []uint32
+	nodeMap      map[uint32]string
+	nodes        map[string]struct{}
+	mu           sync.RWMutex
 }
 
 func NewRing(virtualNodes int) *Ring {
@@ -18,19 +20,31 @@ func NewRing(virtualNodes int) *Ring {
 		virtualNodes: virtualNodes,
 		positions:    []uint32{},
 		nodeMap:      make(map[uint32]string),
+		nodes:        make(map[string]struct{}),
 	}
 }
 
 func (r *Ring) AddNode(node string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.nodes[node]; exists {
+		return
+	}
+
 	for i := 0; i < r.virtualNodes; i++ {
 		position := hash(node + "#" + strconv.Itoa(i))
 		r.positions = append(r.positions, position)
 		r.nodeMap[position] = node
 	}
 	slices.Sort(r.positions)
+	r.nodes[node] = struct{}{}
 }
 
 func (r *Ring) GetNode(key string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if len(r.positions) == 0 {
 		return ""
 	}
@@ -44,16 +58,23 @@ func (r *Ring) GetNode(key string) string {
 }
 
 func (r *Ring) RemoveNode(node string) {
-	for i := 0; i < r.virtualNodes; i++ {
-		position := hash(node + "#" + strconv.Itoa(i))
-		delete(r.nodeMap, position)
-		for j, pos := range r.positions {
-			if pos == position {
-				r.positions = append(r.positions[:j], r.positions[j+1:]...)
-				break
-			}
-		}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.nodes[node]; !exists {
+		return
 	}
+
+	filtered := r.positions[:0]
+	for _, pos := range r.positions {
+		if r.nodeMap[pos] == node {
+			delete(r.nodeMap, pos)
+			continue
+		}
+		filtered = append(filtered, pos)
+	}
+	r.positions = filtered
+	delete(r.nodes, node)
 }
 
 func (r *Ring) GetOwner(key string) string {

@@ -1,5 +1,5 @@
 specter:
-  listen: ":8080"
+  listen: ":8081"
   live_target: "http://localhost:3000"
   shadow_target: "http://localhost:3001"
   routing_key: "X-User-ID"

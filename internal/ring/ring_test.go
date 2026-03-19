@@ -163,3 +163,27 @@ func TestRingOneNode(t *testing.T) {
 		}
 	}
 }
+
+// TestRingAddNodeIdempotent ensures duplicate AddNode calls are safe and
+// do not leave stale positions that can return empty owners after removal.
+func TestRingAddNodeIdempotent(t *testing.T) {
+	r := NewRing(100)
+	r.AddNode("node-a")
+	r.AddNode("node-a") // duplicate add must be ignored
+	r.AddNode("node-b")
+
+	before := r.GetOwner("user-42")
+	if before == "" {
+		t.Fatal("expected non-empty owner before removal")
+	}
+
+	r.RemoveNode("node-a")
+
+	after := r.GetOwner("user-42")
+	if after == "" {
+		t.Fatal("expected non-empty owner after removal")
+	}
+	if after != "node-b" {
+		t.Fatalf("expected owner to be node-b after removing node-a, got %q", after)
+	}
+}
