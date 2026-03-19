@@ -1,13 +1,3 @@
-// DAY 16 TEST — Consistent hash ring
-// Run with: go test ./internal/ring/ -run TestRing -v
-//
-// What this tests:
-//   - GetOwner returns a node for any key
-//   - The same key always maps to the same node (determinism)
-//   - Removing a node only reassigns ~1/N keys (core consistent hashing guarantee)
-//   - Adding a node redistributes some but not all keys
-//   - An empty ring returns an error or empty string (not a panic)
-
 package ring
 
 import (
@@ -160,6 +150,25 @@ func TestRingOneNode(t *testing.T) {
 		owner := r.GetOwner(key)
 		if owner != "only-node" {
 			t.Errorf("single-node ring: expected 'only-node', got %q for key %q", owner, key)
+		}
+	}
+}
+
+// TestRingRemoveAllButOne ensures ownership is stable when all nodes except one are removed.
+func TestRingRemoveAllButOne(t *testing.T) {
+	r := NewRing(100)
+	r.AddNode("node-a")
+	r.AddNode("node-b")
+	r.AddNode("node-c")
+
+	r.RemoveNode("node-b")
+	r.RemoveNode("node-c")
+
+	for i := 0; i < 100; i++ {
+		key := fmt.Sprintf("user-%d", i)
+		owner := r.GetOwner(key)
+		if owner != "node-a" {
+			t.Fatalf("expected owner node-a after removing other nodes, got %q for key %q", owner, key)
 		}
 	}
 }
