@@ -31,8 +31,17 @@ type appModel struct {
 	client    *http.Client
 	statsURL  string
 	dashboard dashboardModel
+	drilldown drilldownModel
+	mode      viewMode
 	lastError error
 }
+
+type viewMode int
+
+const (
+	modeDashboard viewMode = iota
+	modeDrilldown
+)
 
 func Run(statsURL string) error {
 	program := tea.NewProgram(newAppModel(statsURL), tea.WithAltScreen())
@@ -45,6 +54,7 @@ func newAppModel(statsURL string) appModel {
 		client:    &http.Client{Timeout: 2 * time.Second},
 		statsURL:  statsURL,
 		dashboard: newDashboard(),
+		mode:      modeDashboard,
 	}
 }
 
@@ -57,7 +67,18 @@ func (m appModel) Init() tea.Cmd {
 
 func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch typed := msg.(type) {
+	case openDrilldownMsg:
+		m.drilldown = newDrilldown(typed.event)
+		m.mode = modeDrilldown
+		return m, nil
 	case tea.KeyMsg:
+		if m.mode == modeDrilldown {
+			switch typed.String() {
+			case "esc", "b":
+				m.mode = modeDashboard
+				return m, nil
+			}
+		}
 		switch typed.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
@@ -77,17 +98,28 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.mode == modeDrilldown {
+		var cmd tea.Cmd
+		m.drilldown, cmd = m.drilldown.Update(msg)
+		return m, cmd
+	}
+
 	var cmd tea.Cmd
 	m.dashboard, cmd = m.dashboard.Update(msg)
 	return m, cmd
 }
 
 func (m appModel) View() string {
+	content := m.dashboard.View()
+	if m.mode == modeDrilldown {
+		content = m.drilldown.View()
+	}
+
 	if m.lastError != nil {
 		banner := errorBannerStyle.Render(fmt.Sprintf("Stats fetch failed: %v", m.lastError))
-		return fmt.Sprintf("%s\n\n%s", banner, m.dashboard.View())
+		return fmt.Sprintf("%s\n\n%s", banner, content)
 	}
-	return m.dashboard.View()
+	return content
 }
 
 func tickCmd() tea.Cmd {

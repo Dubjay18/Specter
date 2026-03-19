@@ -59,6 +59,11 @@ type dashboardModel struct {
 	width        int
 	height       int
 	scrollOffset int
+	selected     int
+}
+
+type openDrilldownMsg struct {
+	event types.DivergenceEvent
 }
 
 func newDashboard() dashboardModel {
@@ -67,6 +72,8 @@ func newDashboard() dashboardModel {
 
 func (m dashboardModel) WithSnapshot(snapshot divergence.StatsSnapshot) dashboardModel {
 	m.snapshot = snapshot
+	m.selected = clamp(m.selected, 0, max(0, len(m.snapshot.RecentDivergences)-1))
+	m.ensureSelectionVisible()
 	m.scrollOffset = clamp(m.scrollOffset, 0, m.maxScroll())
 	return m
 }
@@ -80,17 +87,41 @@ func (m dashboardModel) Update(msg tea.Msg) (dashboardModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch typed.String() {
 		case "j", "down":
-			m.scrollOffset = clamp(m.scrollOffset+1, 0, m.maxScroll())
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = clamp(m.selected+1, 0, len(m.snapshot.RecentDivergences)-1)
+				m.ensureSelectionVisible()
+			}
 		case "k", "up":
-			m.scrollOffset = clamp(m.scrollOffset-1, 0, m.maxScroll())
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = clamp(m.selected-1, 0, len(m.snapshot.RecentDivergences)-1)
+				m.ensureSelectionVisible()
+			}
 		case "pgdown":
-			m.scrollOffset = clamp(m.scrollOffset+5, 0, m.maxScroll())
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = clamp(m.selected+m.visibleRows(), 0, len(m.snapshot.RecentDivergences)-1)
+				m.ensureSelectionVisible()
+			}
 		case "pgup":
-			m.scrollOffset = clamp(m.scrollOffset-5, 0, m.maxScroll())
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = clamp(m.selected-m.visibleRows(), 0, len(m.snapshot.RecentDivergences)-1)
+				m.ensureSelectionVisible()
+			}
 		case "g":
-			m.scrollOffset = 0
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = 0
+				m.ensureSelectionVisible()
+			}
 		case "G":
-			m.scrollOffset = m.maxScroll()
+			if len(m.snapshot.RecentDivergences) > 0 {
+				m.selected = len(m.snapshot.RecentDivergences) - 1
+				m.ensureSelectionVisible()
+			}
+		case "enter":
+			if event, ok := m.SelectedEvent(); ok {
+				return m, func() tea.Msg {
+					return openDrilldownMsg{event: event}
+				}
+			}
 		}
 	}
 	return m, nil
@@ -123,7 +154,7 @@ func (m dashboardModel) View() string {
 
 	lines := []string{
 		titleStyle.Render("Specter Dashboard"),
-		helpStyle.Render("Auto-refresh: 1s • Controls: j/k or ↑/↓ scroll • q quit"),
+		helpStyle.Render("Auto-refresh: 1s • Controls: j/k or ↑/↓ move • Enter details • q quit"),
 		"",
 		metricsRow,
 		"",
@@ -138,10 +169,37 @@ func (m dashboardModel) View() string {
 
 	start, end := m.visibleRange(len(events))
 	for index := start; index < end; index++ {
-		lines = append(lines, formatEvent(index+1, events[index]))
+		lines = append(lines, formatEvent(index+1, events[index], index == m.selected))
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+func (m dashboardModel) SelectedEvent() (types.DivergenceEvent, bool) {
+	if len(m.snapshot.RecentDivergences) == 0 {
+		return types.DivergenceEvent{}, false
+	}
+	idx := clamp(m.selected, 0, len(m.snapshot.RecentDivergences)-1)
+	return m.snapshot.RecentDivergences[idx], true
+}
+
+func (m *dashboardModel) ensureSelectionVisible() {
+	if len(m.snapshot.RecentDivergences) == 0 {
+		m.scrollOffset = 0
+		m.selected = 0
+		return
+	}
+
+	maxIndex := len(m.snapshot.RecentDivergences) - 1
+	m.selected = clamp(m.selected, 0, maxIndex)
+	visibleRows := m.visibleRows()
+	if m.selected < m.scrollOffset {
+		m.scrollOffset = m.selected
+	}
+	if m.selected >= m.scrollOffset+visibleRows {
+		m.scrollOffset = m.selected - visibleRows + 1
+	}
+	m.scrollOffset = clamp(m.scrollOffset, 0, m.maxScroll())
 }
 
 func (m dashboardModel) maxScroll() int {
@@ -176,7 +234,7 @@ func (m dashboardModel) visibleRange(total int) (int, int) {
 	return start, end
 }
 
-func formatEvent(index int, event types.DivergenceEvent) string {
+func formatEvent(index int, event types.DivergenceEvent, selected bool) string {
 	statusDiff := "-"
 	if event.StatusDiff != nil {
 		statusDiff = fmt.Sprintf("%d→%d", event.StatusDiff.Live, event.StatusDiff.Shadow)
@@ -192,7 +250,7 @@ func formatEvent(index int, event types.DivergenceEvent) string {
 	}
 	latency := latencyStyle.Render(latencyRaw)
 
-	return lipgloss.JoinHorizontal(
+	row := lipgloss.JoinHorizontal(
 		lipgloss.Top,
 		rowIndexStyle.Render(fmt.Sprintf("%2d.", index)),
 		" ",
@@ -206,6 +264,15 @@ func formatEvent(index int, event types.DivergenceEvent) string {
 		labelStyle.Render("latency:"),
 		latency,
 	)
+
+	if selected {
+		pointer := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39")).Render("›")
+		row = lipgloss.JoinHorizontal(lipgloss.Top, pointer, " ", row)
+	} else {
+		row = "  " + row
+	}
+
+	return row
 }
 
 func truncate(value string, max int) string {
