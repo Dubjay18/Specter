@@ -1,0 +1,19 @@
+specter:
+  listen: ":8080"
+  live_target: "http://live-service:3000"
+  shadow_target: "http://shadow-service:3001"
+  routing_key: "X-User-ID"
+
+cluster:
+  node_name: "specter-docker"
+  bind_addr: "0.0.0.0:7946"
+  peers: []
+
+store:
+  backend: "badger"
+  badger_path: "/data/specter"
+  postgres_dsn: ""
+
+sampling:
+  rate: 1.0
+  divergence_only: false

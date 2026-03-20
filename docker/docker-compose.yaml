@@ -1,0 +1,35 @@
+services:
+  specter:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: specter
+    command: ["/app/specter", "--config", "/app/config/specter-docker.yaml"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      - live-service
+      - shadow-service
+    volumes:
+      - specter-data:/data
+
+  live-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: live-service
+    command: ["/app/testserver", "--mode", "live", "--port", "3000"]
+    expose:
+      - "3000"
+
+  shadow-service:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: shadow-service
+    command: ["/app/testserver", "--mode", "shadow", "--port", "3001"]
+    expose:
+      - "3001"
+
+volumes:
+  specter-data:

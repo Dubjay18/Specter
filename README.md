@@ -16,6 +16,8 @@
 </p>
 
 <p align="center">
+  <a href="https://goreportcard.com/report/github.com/Dubjay/specter"><img src="https://goreportcard.com/badge/github.com/Dubjay/specter" alt="Go Report Card" /></a>
+  <a href="https://github.com/Dubjay/specter/actions/workflows/ci.yml"><img src="https://github.com/Dubjay/specter/actions/workflows/ci.yml/badge.svg" alt="Build" /></a>
   <img src="https://img.shields.io/badge/status-in%20progress-yellow" />
   <img src="https://img.shields.io/badge/built%20with-Go-00ADD8?logo=go" />
   <img src="https://img.shields.io/badge/inspired%20by-Uber%20Ringpop-black" />
@@ -58,3 +60,62 @@ That's the catch-22. Specter breaks it.
 | Sleepless deploy nights | Boring deploy afternoons |
 
 ---
+
+## Quick Start
+
+Three commands to run Specter locally with Docker Compose:
+
+```bash
+git clone https://github.com/Dubjay/specter.git && cd specter
+docker compose -f docker/docker-compose.yaml up --build
+curl -s -H "X-User-ID: user-123" http://127.0.0.1:8080/profile
+```
+
+Optional: inspect aggregated divergence stats:
+
+```bash
+curl -s http://127.0.0.1:8080/api/stats
+```
+
+## Config File Reference
+
+Specter config lives in YAML (examples: `internal/config/specter.yaml`, `internal/config/specter-1.yaml`, `internal/config/specter-2.yaml`).
+
+### `specter`
+
+- `listen` (string): Address and port for Specter to bind to, for example `":8080"`. Default: `":8080"`.
+- `live_target` (string): Base URL for the live/primary upstream service that serves client traffic.
+- `shadow_target` (string): Base URL for the shadow/candidate upstream service used for mirrored requests.
+- `routing_key` (string): HTTP header name used for deterministic routing/ring ownership, e.g. `"X-User-ID"`. Default: `"X-User-ID"`.
+
+### `cluster`
+
+- `node_name` (string): Unique node identifier in the Specter cluster.
+- `bind_addr` (string): Gossip/memberlist bind address (host:port), for example `"0.0.0.0:7946"`.
+- `peers` (array of strings): Seed peers to join on startup, e.g. `["10.0.0.10:7946", "10.0.0.11:7946"]`.
+
+### `store`
+
+- `backend` (string): Storage backend. Supported values are `"badger"` and `"postgres"`. Default: `"badger"`.
+- `badger_path` (string): Filesystem path for local BadgerDB data. Used when `backend: "badger"`. Default: `"./data/specter"`.
+- `postgres_dsn` (string): DSN/connection string for Postgres. Used when `backend: "postgres"`.
+
+### `sampling`
+
+- `rate` (float): Mirror percentage from `0.0` to `1.0` (`1.0` means mirror all requests). Default: `1.0`.
+- `divergence_only` (bool): If `true`, only stores events where live vs shadow responses diverge. Default: `false`.
+
+## How the Ring Works
+
+Specter uses consistent hashing with virtual nodes: each cluster node is inserted many times on a hash ring, and each request key (from `specter.routing_key`, such as `X-User-ID`) is hashed to the nearest clockwise position. That determines request ownership consistently across the cluster, minimizes remapping when nodes join/leave, and keeps traffic distribution smoother than single-slot-per-node hashing.
+
+## Contributing
+
+Contributions are welcome.
+
+1. Fork and clone the repo.
+2. Create a feature branch.
+3. Run checks locally: `go test ./...`.
+4. Open a pull request with a clear summary of the change and any behavior/UX impact.
+
+If your change adds or modifies behavior, include corresponding tests under `internal/...` where appropriate.
