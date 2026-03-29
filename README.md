@@ -77,6 +77,55 @@ Optional: inspect aggregated divergence stats:
 curl -s http://127.0.0.1:8080/api/stats
 ```
 
+## TUI Dashboard
+
+The terminal UI polls `GET /api/stats` every second and shows live divergence metrics.
+
+For a one-command local demo (starts mock upstreams + Specter proxy + TUI):
+
+```bash
+make tui-demo
+```
+
+### Run TUI against a running Specter instance
+
+If Specter is already running on `:8080` (for example via Docker Compose):
+
+```bash
+TERM=xterm-256color go run ./cmd/specter --config internal/config/specter.yaml --ui tui
+```
+
+### Local demo flow (without Docker)
+
+Start the two mock upstreams and Specter proxy:
+
+```bash
+go run ./cmd/testserver --port 3000 --mode live
+go run ./cmd/testserver --port 3001 --mode shadow
+go run ./cmd/specter --config internal/config/specter.yaml --ui proxy
+```
+
+Generate some traffic in another terminal:
+
+```bash
+for i in $(seq 1 20); do
+  curl -s -H "X-User-ID: user-$i" http://127.0.0.1:8080/profile > /dev/null
+done
+```
+
+Then open the TUI:
+
+```bash
+TERM=xterm-256color go run ./cmd/specter --config internal/config/specter.yaml --ui tui
+```
+
+### Controls
+
+- `j`/`k` or `↑`/`↓`: move selection/scroll
+- `Enter`: open selected divergence drill-down
+- `Esc` or `b`: return to dashboard from drill-down
+- `q` (or `Ctrl+C`): quit
+
 ## Config File Reference
 
 Specter config lives in YAML (examples: `internal/config/specter.yaml`, `internal/config/specter-1.yaml`, `internal/config/specter-2.yaml`).

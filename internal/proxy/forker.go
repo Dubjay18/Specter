@@ -8,13 +8,15 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/Dubjay/specter/internal/types"
 )
 
 var shadowClient = &http.Client{
 	Timeout: 10 * time.Second,
 }
 
-func (p *Proxy) forkToShadow(r *http.Request, body []byte) {
+func (p *Proxy) forkToShadow(r *http.Request, body []byte, live *types.CapturedResponse) {
 	// Parse the shadow URL
 	shadowTarget, err := url.Parse(p.shadowURL)
 	if err != nil {
@@ -45,10 +47,11 @@ func (p *Proxy) forkToShadow(r *http.Request, body []byte) {
 		log.Printf("specter: failed to capture shadow response: %v", err)
 		return
 	}
-
-
-
-log.Printf("specter: shadow → status=%d latency=%v body=%s",
+	log.Printf("specter: shadow → status=%d latency=%v body=%s",
 		captured.StatusCode, captured.Latency, captured.Body)
+
+	if p.divergence != nil && live != nil {
+		p.divergence.Analyze(r, live, captured)
+	}
 
 }

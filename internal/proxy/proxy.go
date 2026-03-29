@@ -14,6 +14,7 @@ import (
 
 	"github.com/Dubjay/specter/internal/divergence"
 	"github.com/Dubjay/specter/internal/ring"
+	"github.com/Dubjay/specter/internal/types"
 )
 
 type Proxy struct {
@@ -91,11 +92,62 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("specter: owner %s unavailable, falling back to local handling", owner)
 	}
 
-	if p.shadowURL != "" {
-		go p.forkToShadow(r, body)
-	}
 	log.Printf("specter: %s %s → live", r.Method, r.URL.Path)
-	p.ReverseProxy.ServeHTTP(w, r)
+
+	liveStart := time.Now()
+	recorder := newCaptureResponseWriter(w)
+	p.ReverseProxy.ServeHTTP(recorder, r)
+
+	if p.shadowURL != "" && p.divergence != nil {
+		analysisReq := requestForAnalysis(r)
+		liveCaptured := &types.CapturedResponse{
+			StatusCode: recorder.StatusCode(),
+			Body:       append([]byte(nil), recorder.Body()...),
+			Headers:    recorder.Header().Clone(),
+			Latency:    time.Since(liveStart),
+		}
+		go p.forkToShadow(analysisReq, body, liveCaptured)
+	}
+}
+
+func requestForAnalysis(r *http.Request) *http.Request {
+	clone := r.Clone(context.Background())
+	clone.Body = nil
+	return clone
+}
+
+type captureResponseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	body       bytes.Buffer
+}
+
+func newCaptureResponseWriter(w http.ResponseWriter) *captureResponseWriter {
+	return &captureResponseWriter{ResponseWriter: w}
+}
+
+func (w *captureResponseWriter) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func (w *captureResponseWriter) Write(payload []byte) (int, error) {
+	if w.statusCode == 0 {
+		w.statusCode = http.StatusOK
+	}
+	w.body.Write(payload)
+	return w.ResponseWriter.Write(payload)
+}
+
+func (w *captureResponseWriter) StatusCode() int {
+	if w.statusCode == 0 {
+		return http.StatusOK
+	}
+	return w.statusCode
+}
+
+func (w *captureResponseWriter) Body() []byte {
+	return w.body.Bytes()
 }
 
 func (p *Proxy) forwardToOwner(w http.ResponseWriter, r *http.Request, body []byte, owner string) bool {
