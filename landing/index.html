@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Specter — Shadow-Mode Traffic Mirror &amp; Divergence Analysis</title>
+<meta name="description" content="Specter mirrors real production traffic to your shadow service, compares every response, and proves your rewrite is correct before cutover." />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👻</text></svg>" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div class="scanline"></div>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="#top" class="brand">
+      <span class="brand-mark">◆</span> SPECTER
+    </a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#ring">The Ring</a>
+      <a href="#features">Features</a>
+      <a href="#quickstart">Quick Start</a>
+      <a href="https://github.com/Dubjay/specter" target="_blank" rel="noopener" class="nav-cta">GitHub ↗</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-badge reveal">
+      <span class="dot dot-live"></span> LIVE <span class="sep">×</span> <span class="dot dot-shadow"></span> SHADOW <span class="sep">·</span> real traffic, zero risk
+    </div>
+
+    <h1 class="hero-title">
+      <span class="reveal reveal-1">Your rewrite</span>
+      <span class="reveal reveal-2 glitch" data-text="says it works.">says it works.</span>
+      <span class="reveal reveal-3 accent">Specter makes it prove it.</span>
+    </h1>
+
+    <p class="hero-sub reveal reveal-4">
+      A distributed shadow-mode traffic mirror with divergence analysis, written in Go.
+      Every request hits your <b>live</b> service as normal — and a silent copy fires at your
+      <b>shadow</b> service. Specter diffs the two and tells you exactly where they disagree.
+    </p>
+
+    <div class="hero-cta reveal reveal-5">
+      <a href="#quickstart" class="btn btn-primary">Run it in 3 commands</a>
+      <a href="https://github.com/Dubjay/specter" target="_blank" rel="noopener" class="btn btn-ghost">View source</a>
+    </div>
+
+    <div class="hero-quote reveal reveal-6">
+      <span class="quote-mark">&ldquo;</span>I don't shadow test. I shadow <em>WIN</em>.<span class="quote-mark">&rdquo;</span>
+      <span class="quote-attr">— Harvey Specter, probably</span>
+    </div>
+
+    <div class="hero-terminal reveal reveal-7">
+      <div class="term-bar">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">specter — request lifecycle</span>
+      </div>
+      <div class="term-body" id="hero-term"></div>
+    </div>
+  </section>
+
+  <!-- PROBLEM -->
+  <section class="section problem">
+    <h2 class="section-title reveal">The catch-22 of every migration</h2>
+    <p class="section-sub reveal">
+      You can't know the new service is correct until real traffic hits it.
+      You can't risk real traffic hitting it until you know it's correct. Specter breaks the loop.
+    </p>
+
+    <div class="compare reveal">
+      <div class="compare-col compare-without">
+        <h3>Without Specter</h3>
+        <ul>
+          <li><span class="x">✕</span> "It passed staging" 🤞</li>
+          <li><span class="x">✕</span> Bugs found after cutover</li>
+          <li><span class="x">✕</span> Blind confidence</li>
+          <li><span class="x">✕</span> Sleepless deploy nights</li>
+        </ul>
+      </div>
+      <div class="compare-arrow">→</div>
+      <div class="compare-col compare-with">
+        <h3>With Specter</h3>
+        <ul>
+          <li><span class="ok">✓</span> "Matched 99.97% of prod traffic" ✅</li>
+          <li><span class="ok">✓</span> Bugs found <em>before</em> cutover</li>
+          <li><span class="ok">✓</span> Evidence-based confidence</li>
+          <li><span class="ok">✓</span> Boring deploy afternoons</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="section how" id="how">
+    <h2 class="section-title reveal">How it works</h2>
+    <p class="section-sub reveal">One request in. Two services hit. Zero risk to the client.</p>
+
+    <div class="diagram reveal" id="diagram">
+      <div class="dg-node dg-client">
+        <div class="dg-icon">🧑‍💻</div>
+        <div class="dg-label">Client</div>
+      </div>
+
+      <div class="dg-flow">
+        <div class="dg-packet" id="packet"></div>
+        <svg class="dg-lines" viewBox="0 0 600 200" preserveAspectRatio="none">
+          <path id="path-in" class="dg-line" d="M20,100 L220,100" />
+          <path id="path-live" class="dg-line dg-line-live" d="M240,100 C 340,100 340,50 420,50" />
+          <path id="path-shadow" class="dg-line dg-line-shadow" d="M240,100 C 340,100 340,150 420,150" />
+        </svg>
+      </div>
+
+      <div class="dg-node dg-specter">
+        <div class="dg-icon">◆</div>
+        <div class="dg-label">Specter</div>
+        <div class="dg-caption">mirrors + compares</div>
+      </div>
+
+      <div class="dg-targets">
+        <div class="dg-node dg-live-target">
+          <div class="dg-icon">🟢</div>
+          <div class="dg-label">Live service</div>
+          <div class="dg-caption">response returned to client</div>
+        </div>
+        <div class="dg-node dg-shadow-target">
+          <div class="dg-icon">👻</div>
+          <div class="dg-label">Shadow service</div>
+          <div class="dg-caption">response discarded, diffed</div>
+        </div>
+      </div>
+
+      <div class="dg-divergence" id="dg-divergence">
+        <span class="dg-div-icon">⚡</span> divergence detected — logged &amp; scored
+      </div>
+    </div>
+  </section>
+
+  <!-- THE RING -->
+  <section class="section ring-section" id="ring">
+    <h2 class="section-title reveal">Consistent hashing, at cluster scale</h2>
+    <p class="section-sub reveal">
+      Every Specter node sits on a hash ring with many virtual nodes. Each request key
+      (say, <code>X-User-ID</code>) hashes to the nearest clockwise position — deterministic
+      ownership, minimal remapping when nodes join or leave. Inspired by Uber's Ringpop.
+    </p>
+
+    <div class="ring-wrap reveal">
+      <canvas id="ring-canvas" width="560" height="560"></canvas>
+      <div class="ring-caption">
+        <span class="ring-legend"><i class="sw sw-node"></i> cluster node (virtual)</span>
+        <span class="ring-legend"><i class="sw sw-key"></i> request key → nearest clockwise node</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="section features" id="features">
+    <h2 class="section-title reveal">Built for real production traffic</h2>
+
+    <div class="feature-grid">
+      <div class="feature-card reveal">
+        <div class="feature-icon">🪞</div>
+        <h3>Zero-risk mirroring</h3>
+        <p>The shadow response never reaches the client. Real traffic, no blast radius.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">📊</div>
+        <h3>Divergence analysis</h3>
+        <p>Every mismatch is logged and scored into a statistical profile of how your rewrite behaves.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🕸️</div>
+        <h3>Distributed by design</h3>
+        <p>Gossip-based clustering with consistent hashing keeps ownership stable as nodes join or leave.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🗄️</div>
+        <h3>Pluggable storage</h3>
+        <p>BadgerDB for local speed, Postgres for durability — swap backends with one config line.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">📺</div>
+        <h3>Live TUI dashboard</h3>
+        <p>A terminal UI polls live divergence stats every second, with drill-down into any mismatch.</p>
+      </div>
+      <div class="feature-card reveal">
+        <div class="feature-icon">🎛️</div>
+        <h3>Configurable sampling</h3>
+        <p>Mirror 1% or 100% of traffic. Store everything, or only the interesting divergences.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section class="section quickstart" id="quickstart">
+    <h2 class="section-title reveal">Three commands. Real traffic. Zero risk.</h2>
+
+    <div class="code-block reveal">
+      <div class="term-bar">
+        <span class="term-dot r"></span><span class="term-dot y"></span><span class="term-dot g"></span>
+        <span class="term-title">shell</span>
+      </div>
+      <pre class="term-body"><code><span class="c-comment"># clone &amp; run with Docker Compose</span>
+<span class="c-cmd">git</span> clone https://github.com/Dubjay/specter.git &amp;&amp; <span class="c-cmd">cd</span> specter
+<span class="c-cmd">docker</span> compose -f docker/docker-compose.yaml up --build
+<span class="c-cmd">curl</span> -s -H <span class="c-str">"X-User-ID: user-123"</span> http://127.0.0.1:8080/profile
+
+<span class="c-comment"># watch it live in the TUI</span>
+<span class="c-cmd">make</span> tui-demo</code></pre>
+    </div>
+
+    <div class="badges reveal">
+      <span class="badge">Go</span>
+      <span class="badge">Docker Compose</span>
+      <span class="badge">Gossip / memberlist</span>
+      <span class="badge">BadgerDB · Postgres</span>
+      <span class="badge">Inspired by Uber Ringpop</span>
+    </div>
+  </section>
+
+  <!-- CTA / FOOTER -->
+  <footer class="footer">
+    <h2 class="footer-title reveal">Stop guessing. Start shadowing.</h2>
+    <p class="reveal">Specter is open source and built to be self-hosted in front of your own services.</p>
+    <a href="https://github.com/Dubjay/specter" target="_blank" rel="noopener" class="btn btn-primary reveal">Get Specter on GitHub ↗</a>
+
+    <div class="footer-quote reveal">
+      <span class="quote-mark">&ldquo;</span>Anyone can do it with perfect data. You want to be great? Test against the messy stuff.<span class="quote-mark">&rdquo;</span>
+      <span class="quote-attr">— Harvey Specter (we're paraphrasing)</span>
+    </div>
+
+    <div class="footer-meta">
+      <span>Specter · shadow-mode traffic mirror</span>
+      <span class="footer-dot">·</span>
+      <span>MIT-style open source</span>
+    </div>
+  </footer>
+
+</main>
+
+<script src="script.js"></script>
+</body>
+</html>
